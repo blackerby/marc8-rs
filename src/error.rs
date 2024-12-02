@@ -7,6 +7,7 @@ use std::string::FromUtf16Error;
 pub enum EncodingError {
     Utf8Error(Utf8Error),
     Utf16Error(FromUtf16Error),
+    NoData,
 }
 
 impl Error for EncodingError {}
@@ -16,6 +17,7 @@ impl Display for EncodingError {
         let message = match &self {
             Self::Utf8Error(_) => "could not decode from utf8",
             Self::Utf16Error(_) => "could not decode from utf16",
+            Self::NoData => "no data in char buffer",
         };
         write!(f, "{message}")
     }

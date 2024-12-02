@@ -108,10 +108,11 @@ impl Decoder {
             }
 
             if code_point < 0x20 || code_point > 0x80 && code_point < 0xA0 {
-                // TODO: get rid of this unwrap
-                self.uni_list
-                    .as_mut()
-                    .map(|v| v.push(char::from_u32(code_point).unwrap()));
+                if let Some(uni_list) = self.uni_list.as_mut() {
+                    if let Some(ch) = char::from_u32(code_point) {
+                        uni_list.push(ch);
+                    }
+                }
             } else if code_point > 0x80 && !mb_flag {
                 if let Some(charset) = codesets().get(&self.g1) {
                     self.handle_codepoint(charset, code_point);
@@ -135,8 +136,11 @@ impl Decoder {
             }
         }
 
-        let uni_string = Cow::Owned(self.uni_list.as_mut().unwrap().iter().collect());
-        Ok(uni_string)
+        if let Some(v) = self.uni_list.to_owned() {
+            return Ok(Cow::Owned(String::from_iter(v)));
+        } else {
+            Err(EncodingError::NoData)
+        }
     }
 
     fn handle_codepoint(&mut self, charset: &HashMap<u32, (char, bool)>, code_point: u32) {
@@ -145,9 +149,11 @@ impl Decoder {
                 self.combinings.as_mut().map(|v| v.push(*uni));
             } else {
                 self.uni_list.as_mut().map(|v| v.push(*uni));
-                if let Some(&combining) = self.combinings.as_mut().unwrap().iter().next() {
-                    self.uni_list.as_mut().map(|v| v.push(combining));
-                    self.combinings.as_mut().map(|v| v.clear());
+                if let Some(combinings) = self.combinings.as_mut() {
+                    if let Some(&combining) = combinings.iter().next() {
+                        self.uni_list.as_mut().map(|v| v.push(combining));
+                        self.combinings.as_mut().map(|v| v.clear());
+                    }
                 }
             }
         }
