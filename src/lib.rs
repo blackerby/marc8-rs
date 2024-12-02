@@ -8,11 +8,14 @@ use crate::error::EncodingError;
 use crate::mappings::{codesets, odd_map};
 use core::str;
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 pub struct Decoder {
     g0: u8,
     g1: u8,
     quiet: bool,
+    uni_list: Option<Vec<char>>,
+    combinings: Option<Vec<char>>,
 }
 
 impl Decoder {
@@ -21,7 +24,13 @@ impl Decoder {
         let g1 = g1.unwrap_or(ANSEL);
         let quiet = quiet.unwrap_or(false);
 
-        Decoder { g0, g1, quiet }
+        Decoder {
+            g0,
+            g1,
+            quiet,
+            uni_list: None,
+            combinings: None,
+        }
     }
 
     pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
@@ -33,8 +42,8 @@ impl Decoder {
             return Ok(Cow::Borrowed(str::from_utf8(marc8_string)?));
         }
 
-        let mut uni_list: Vec<char> = Vec::new();
-        let mut combinings: Vec<char> = Vec::new();
+        self.uni_list = Some(Vec::new());
+        self.combinings = Some(Vec::new());
         let mut pos = 0;
         let mut next_byte: u8;
 
@@ -50,7 +59,9 @@ impl Decoder {
                         self.g0 = marc8_string[pos + 2];
                         pos += 3;
                     } else {
-                        uni_list.push(char::from(marc8_string[pos]));
+                        self.uni_list
+                            .as_mut()
+                            .map(|v| v.push(char::from(marc8_string[pos])));
                         pos += 1;
                     }
                 } else if G1_SET.contains(&next_byte) {
@@ -98,37 +109,19 @@ impl Decoder {
 
             if code_point < 0x20 || code_point > 0x80 && code_point < 0xA0 {
                 // TODO: get rid of this unwrap
-                uni_list.push(char::from_u32(code_point).unwrap());
+                self.uni_list
+                    .as_mut()
+                    .map(|v| v.push(char::from_u32(code_point).unwrap()));
             } else if code_point > 0x80 && !mb_flag {
                 if let Some(charset) = codesets().get(&self.g1) {
-                    if let Some((uni, cflag)) = charset.get(&code_point) {
-                        if *cflag {
-                            combinings.push(*uni);
-                        } else {
-                            uni_list.push(*uni);
-                            if combinings.len() > 0 {
-                                uni_list.extend(combinings.iter());
-                                combinings.clear();
-                            }
-                        }
-                    }
+                    self.handle_codepoint(charset, code_point);
                 }
             } else {
                 if let Some(charset) = codesets().get(&self.g0) {
-                    if let Some((uni, cflag)) = charset.get(&code_point) {
-                        if *cflag {
-                            combinings.push(*uni);
-                        } else {
-                            uni_list.push(*uni);
-                            if combinings.len() > 0 {
-                                uni_list.extend(combinings.iter());
-                                combinings.clear();
-                            }
-                        }
-                    }
+                    self.handle_codepoint(charset, code_point);
                 } else {
                     if let Some(val) = odd_map().get(&(code_point)) {
-                        uni_list.push(*val);
+                        self.uni_list.as_mut().map(|v| v.push(*val));
                     } else {
                         if !self.quiet {
                             eprintln!(
@@ -136,14 +129,28 @@ impl Decoder {
                                 code_point, self.g0, self.g1
                             );
                         }
-                        uni_list.push(BLANK);
+                        self.uni_list.as_mut().map(|v| v.push(BLANK));
                     }
                 }
             }
         }
 
-        let uni_string = Cow::Owned(uni_list.into_iter().collect());
+        let uni_string = Cow::Owned(self.uni_list.as_mut().unwrap().iter().collect());
         Ok(uni_string)
+    }
+
+    fn handle_codepoint(&mut self, charset: &HashMap<u32, (char, bool)>, code_point: u32) {
+        if let Some((uni, cflag)) = charset.get(&code_point) {
+            if *cflag {
+                self.combinings.as_mut().map(|v| v.push(*uni));
+            } else {
+                self.uni_list.as_mut().map(|v| v.push(*uni));
+                if let Some(&combining) = self.combinings.as_mut().unwrap().iter().next() {
+                    self.uni_list.as_mut().map(|v| v.push(combining));
+                    self.combinings.as_mut().map(|v| v.clear());
+                }
+            }
+        }
     }
 }
 
