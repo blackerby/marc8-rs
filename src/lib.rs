@@ -33,8 +33,8 @@ impl Decoder {
             return Ok(Cow::Borrowed(str::from_utf8(marc8_string)?));
         }
 
-        let mut uni_list: Vec<u16> = Vec::new();
-        let mut combinings: Vec<u16> = Vec::new();
+        let mut uni_list: Vec<char> = Vec::new();
+        let mut combinings: Vec<char> = Vec::new();
         let mut pos = 0;
         let mut next_byte: u8;
 
@@ -49,11 +49,9 @@ impl Decoder {
                         }
                         self.g0 = marc8_string[pos + 2];
                         pos += 3;
-                        continue;
                     } else {
-                        uni_list.push(marc8_string[pos] as u16);
+                        uni_list.push(char::from(marc8_string[pos]));
                         pos += 1;
-                        continue;
                     }
                 } else if G1_SET.contains(&next_byte) {
                     if marc8_string[pos + 2] == b'-' && next_byte == b'$' {
@@ -61,7 +59,6 @@ impl Decoder {
                     }
                     self.g1 = marc8_string[pos + 2];
                     pos += 3;
-                    continue;
                 } else {
                     let charset = next_byte;
                     if codesets().contains_key(&charset) {
@@ -100,7 +97,8 @@ impl Decoder {
             }
 
             if code_point < 0x20 || code_point > 0x80 && code_point < 0xA0 {
-                uni_list.push(code_point as u16);
+                // TODO: get rid of this unwrap
+                uni_list.push(char::from_u32(code_point).unwrap());
             } else if code_point > 0x80 && !mb_flag {
                 if let Some(charset) = codesets().get(&self.g1) {
                     if let Some((uni, cflag)) = charset.get(&code_point) {
@@ -129,8 +127,8 @@ impl Decoder {
                         }
                     }
                 } else {
-                    if let Some(val) = odd_map().get(&(code_point as u32)) {
-                        uni_list.push(*val as u16);
+                    if let Some(val) = odd_map().get(&(code_point)) {
+                        uni_list.push(*val);
                     } else {
                         if !self.quiet {
                             eprintln!(
@@ -138,13 +136,13 @@ impl Decoder {
                                 code_point, self.g0, self.g1
                             );
                         }
-                        uni_list.push(BLANK as u16);
+                        uni_list.push(BLANK);
                     }
                 }
             }
         }
 
-        let uni_string = Cow::Owned(String::from_utf16(&uni_list)?);
+        let uni_string = Cow::Owned(uni_list.into_iter().collect());
         Ok(uni_string)
     }
 }

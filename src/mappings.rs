@@ -9,8 +9,8 @@ use std::sync::OnceLock;
 
 macro_rules! charset {
     ($name:ident, $constant_name:expr) => {
-        pub fn $name() -> &'static HashMap<u32, (u16, bool)> {
-            static HASHMAP: OnceLock<HashMap<u32, (u16, bool)>> = OnceLock::new();
+        pub fn $name() -> &'static HashMap<u32, (char, bool)> {
+            static HASHMAP: OnceLock<HashMap<u32, (char, bool)>> = OnceLock::new();
 
             HASHMAP.get_or_init(|| {
                 let mut m = HashMap::new();
@@ -38,8 +38,8 @@ charset!(subscripts, SUBSCRIPTS);
 charset!(greek_symbols, GREEK_SYMBOLS);
 charset!(basic_cyrillic, BASIC_CYRILLIC);
 
-pub fn codesets() -> &'static HashMap<u8, &'static HashMap<u32, (u16, bool)>> {
-    static HASHMAP: OnceLock<HashMap<u8, &'static HashMap<u32, (u16, bool)>>> = OnceLock::new();
+pub fn codesets() -> &'static HashMap<u8, &'static HashMap<u32, (char, bool)>> {
+    static HASHMAP: OnceLock<HashMap<u8, &'static HashMap<u32, (char, bool)>>> = OnceLock::new();
 
     HASHMAP.get_or_init(|| {
         let mut m = HashMap::new();
@@ -62,18 +62,18 @@ pub fn codesets() -> &'static HashMap<u8, &'static HashMap<u32, (u16, bool)>> {
 }
 
 // ODD_MAP for odd characters (all from III for now)
-pub fn odd_map() -> &'static HashMap<u32, u16> {
-    static HASHMAP: OnceLock<HashMap<u32, u16>> = OnceLock::new();
+pub fn odd_map() -> &'static HashMap<u32, char> {
+    static HASHMAP: OnceLock<HashMap<u32, char>> = OnceLock::new();
 
     HASHMAP.get_or_init(|| {
         let mut m = HashMap::new();
 
-        m.insert(0x21203D, 0x2026); // HORIZONTAL ELLIPSIS
-        m.insert(0x212040, 0x201C); // LEFT DOUBLE QUOTATION MARK
-        m.insert(0x7F2014, 0x2014); // EM DASH
-        m.insert(0x7F2019, 0x2019); // RIGHT SINGLE QUOTATION MARK
-        m.insert(0x7F2020, 0x201D); // RIGHT DOUBLE QUOTATION MARK
-        m.insert(0x7F2122, 0x2122); // TRADE MARK SIGN
+        m.insert(0x21203D, '\u{2026}'); // HORIZONTAL ELLIPSIS
+        m.insert(0x212040, '\u{201C}'); // LEFT DOUBLE QUOTATION MARK
+        m.insert(0x7F2014, '\u{2014}'); // EM DASH
+        m.insert(0x7F2019, '\u{2019}'); // RIGHT SINGLE QUOTATION MARK
+        m.insert(0x7F2020, '\u{201D}'); // RIGHT DOUBLE QUOTATION MARK
+        m.insert(0x7F2122, '\u{2122}'); // TRADE MARK SIGN
 
         m
     })
