@@ -24,7 +24,6 @@ impl Decoder {
         Decoder { g0, g1, quiet }
     }
 
-    #[allow(unused_assignments)]
     pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
         if marc8_string.is_empty() {
             return Ok(Cow::Borrowed(""));
@@ -79,7 +78,7 @@ impl Decoder {
             }
 
             let mb_flag = self.g0 == EACC;
-            let mut code_point: u32 = 0;
+            let code_point: u32;
             if mb_flag {
                 if marc8_string.len() < pos + 3 {
                     eprintln!(
@@ -88,34 +87,50 @@ impl Decoder {
                         marc8_string.len()
                     );
                     code_point = BLANK as u32;
+                } else {
+                    let mut bytes: [u8; 4] = [0, 0, 0, 0];
+                    bytes[1] = marc8_string[pos];
+                    bytes[2] = marc8_string[pos + 1];
+                    bytes[3] = marc8_string[pos + 2];
+                    code_point = u32::from_le_bytes(bytes);
                 }
             } else {
                 code_point = marc8_string[pos] as u32;
                 pos += 1;
             }
 
-            let mut uni: u16 = 0;
-            let mut cflag = false;
             if code_point < 0x20 || code_point > 0x80 && code_point < 0xA0 {
-                uni = code_point as u16;
-                continue;
+                uni_list.push(code_point as u16);
             } else if code_point > 0x80 && !mb_flag {
                 if let Some(charset) = codesets().get(&self.g1) {
-                    if let Some((uni_ref, cflag_ref)) = charset.get(&code_point) {
-                        uni = *uni_ref;
-                        cflag = *cflag_ref;
+                    if let Some((uni, cflag)) = charset.get(&code_point) {
+                        if *cflag {
+                            combinings.push(*uni);
+                        } else {
+                            uni_list.push(*uni);
+                            if combinings.len() > 0 {
+                                uni_list.extend(combinings.iter());
+                                combinings.clear();
+                            }
+                        }
                     }
                 }
             } else {
                 if let Some(charset) = codesets().get(&self.g0) {
-                    if let Some((uni_ref, cflag_ref)) = charset.get(&code_point) {
-                        uni = *uni_ref;
-                        cflag = *cflag_ref;
+                    if let Some((uni, cflag)) = charset.get(&code_point) {
+                        if *cflag {
+                            combinings.push(*uni);
+                        } else {
+                            uni_list.push(*uni);
+                            if combinings.len() > 0 {
+                                uni_list.extend(combinings.iter());
+                                combinings.clear();
+                            }
+                        }
                     }
                 } else {
                     if let Some(val) = odd_map().get(&(code_point as u32)) {
                         uni_list.push(*val as u16);
-                        continue;
                     } else {
                         if !self.quiet {
                             eprintln!(
@@ -123,19 +138,8 @@ impl Decoder {
                                 code_point, self.g0, self.g1
                             );
                         }
-                        uni = BLANK as u16;
-                        cflag = false;
+                        uni_list.push(BLANK as u16);
                     }
-                }
-            }
-
-            if cflag {
-                combinings.push(uni);
-            } else {
-                uni_list.push(uni);
-                if combinings.len() > 0 {
-                    uni_list.extend(combinings.iter());
-                    combinings.clear();
                 }
             }
         }
