@@ -8,7 +8,8 @@ name = "marc8"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.23.2", features = ["abi3-py38"] }
+pyo3 = { version = "0.23.2", features = ["abi3-py38"], optional = true }
  
-# [features]
-# python = ["dep:pyo3"]
+[features]
+python = ["dep:pyo3"]
+

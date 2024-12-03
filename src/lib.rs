@@ -7,6 +7,7 @@ use crate::constants::*;
 use crate::error::EncodingError;
 use crate::mappings::{codesets, odd_map};
 use core::str;
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -161,9 +162,11 @@ impl Decoder {
     }
 }
 
+#[cfg(feature = "python")]
 #[pyclass]
 struct MARC8ToUnicode(Decoder);
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl MARC8ToUnicode {
     #[new]
@@ -177,6 +180,7 @@ impl MARC8ToUnicode {
     }
 }
 
+#[cfg(feature = "python")]
 #[pymodule]
 fn marc8(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MARC8ToUnicode>()?;
