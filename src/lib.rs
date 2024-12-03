@@ -7,6 +7,7 @@ use crate::constants::*;
 use crate::error::EncodingError;
 use crate::mappings::{codesets, odd_map};
 use core::str;
+use pyo3::prelude::*;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -158,6 +159,28 @@ impl Decoder {
             }
         }
     }
+}
+
+#[pyclass]
+struct MARC8ToUnicode(Decoder);
+
+#[pymethods]
+impl MARC8ToUnicode {
+    #[new]
+    #[pyo3(signature = (g0 = None, g1 = None, quiet = None))]
+    fn new(g0: Option<u8>, g1: Option<u8>, quiet: Option<bool>) -> Self {
+        Self(Decoder::new(g0, g1, quiet))
+    }
+
+    fn translate(&mut self, marc8_string: String) -> String {
+        self.0.decode(marc8_string.as_bytes()).unwrap().to_string()
+    }
+}
+
+#[pymodule]
+fn marc8(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<MARC8ToUnicode>()?;
+    Ok(())
 }
 
 #[cfg(test)]
