@@ -198,4 +198,12 @@ mod tests {
         let got = converter.decode(b"Conversa\xF0c\xE4ao").unwrap();
         assert_eq!(got, want);
     }
+
+    #[test]
+    fn subscript_works() {
+        let mut converter = Decoder::new(None, None, None);
+        let want = "CO₂ is a gas".to_string();
+        let got = converter.decode(b"CO\x1bb2\x1bs is a gas").unwrap();
+        assert_eq!(got, want);
+    }
 }
