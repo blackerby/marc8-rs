@@ -40,10 +40,6 @@ impl Decoder {
             return Ok(Cow::Borrowed(""));
         }
 
-        if marc8_string.iter().all(|ch| ch.is_ascii()) {
-            return Ok(Cow::Borrowed(str::from_utf8(marc8_string)?));
-        }
-
         self.uni_list = Some(Vec::new());
         self.combinings = Some(Vec::new());
         let mut pos = 0;
