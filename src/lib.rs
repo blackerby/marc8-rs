@@ -172,8 +172,8 @@ impl MARC8ToUnicode {
         Self(Decoder::new(g0, g1, quiet))
     }
 
-    fn translate(&mut self, marc8_string: String) -> String {
-        self.0.decode(marc8_string.as_bytes()).unwrap().to_string()
+    fn translate(&mut self, marc8_string: &[u8]) -> String {
+        self.0.decode(marc8_string).unwrap().to_string()
     }
 }
 
