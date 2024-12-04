@@ -115,11 +115,8 @@ impl Decoder {
             } else {
                 &self.g0
             };
-            dbg!(code_point);
             if let Some(charset) = codesets().get(codeset) {
-                dbg!(codeset);
                 if let Some((uni, cflag)) = charset.get(&code_point) {
-                    dbg!(uni);
                     if *cflag {
                         self.combinings.as_mut().map(|v| v.push(*uni));
                     } else {
@@ -131,20 +128,18 @@ impl Decoder {
                             }
                         }
                     }
+                } else if let Some(uni) = odd_map().get(&(code_point)) {
+                    self.uni_list.as_mut().map(|v| v.push(*uni));
+                    continue;
                 } else {
-                    if let Some(uni) = odd_map().get(&(code_point)) {
-                        self.uni_list.as_mut().map(|v| v.push(*uni));
-                        continue;
+                    if !self.quiet {
+                        eprintln!(
+                            "Unable to parse character 0x{:X} in g0={} g1={}",
+                            code_point, self.g0, self.g1
+                        );
                     }
+                    self.uni_list.as_mut().map(|v| v.push(BLANK));
                 }
-            } else {
-                if !self.quiet {
-                    eprintln!(
-                        "Unable to parse character 0x{:X} in g0={} g1={}",
-                        code_point, self.g0, self.g1
-                    );
-                }
-                self.uni_list.as_mut().map(|v| v.push(BLANK));
             }
         }
 
