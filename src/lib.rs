@@ -100,6 +100,7 @@ impl Decoder {
                     bytes[3] = marc8_string[pos + 2];
                     code_point = u32::from_le_bytes(bytes);
                 }
+                pos += 3;
             } else {
                 code_point = marc8_string[pos] as u32;
                 pos += 1;
