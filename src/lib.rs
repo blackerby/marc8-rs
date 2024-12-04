@@ -6,11 +6,9 @@ mod mappings;
 use crate::constants::*;
 use crate::error::EncodingError;
 use crate::mappings::{codesets, odd_map};
-use core::str;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-use std::borrow::Cow;
-use std::collections::HashMap;
+use unicode_normalization::UnicodeNormalization;
 
 pub struct Decoder {
     g0: u8,
@@ -35,9 +33,9 @@ impl Decoder {
         }
     }
 
-    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<String, EncodingError> {
         if marc8_string.is_empty() {
-            return Ok(Cow::Borrowed(""));
+            return Ok("".to_string());
         }
 
         self.uni_list = Some(Vec::new());
@@ -50,17 +48,19 @@ impl Decoder {
                 next_byte = marc8_string[pos + 1];
 
                 if G0_SET.contains(&next_byte) {
-                    if marc8_string.len() > pos + 2 {
+                    if marc8_string.len() >= pos + 3 {
                         if marc8_string[pos + 2] == b',' && next_byte == b'$' {
                             pos += 1;
                         }
                         self.g0 = marc8_string[pos + 2];
                         pos += 3;
+                        continue;
                     } else {
                         self.uni_list
                             .as_mut()
                             .map(|v| v.push(char::from(marc8_string[pos])));
                         pos += 1;
+                        continue;
                     }
                 } else if G1_SET.contains(&next_byte) {
                     if marc8_string[pos + 2] == b'-' && next_byte == b'$' {
@@ -68,6 +68,7 @@ impl Decoder {
                     }
                     self.g1 = marc8_string[pos + 2];
                     pos += 3;
+                    continue;
                 } else {
                     let charset = next_byte;
                     if codesets().contains_key(&charset) {
@@ -107,54 +108,50 @@ impl Decoder {
             }
 
             if code_point < 0x20 || code_point > 0x80 && code_point < 0xA0 {
-                if let Some(uni_list) = self.uni_list.as_mut() {
-                    if let Some(ch) = char::from_u32(code_point) {
-                        uni_list.push(ch);
+                continue;
+            }
+
+            let codeset = if code_point > 0x80 && !mb_flag {
+                &self.g1
+            } else {
+                &self.g0
+            };
+
+            if let Some(charset) = codesets().get(codeset) {
+                if let Some((uni, cflag)) = charset.get(&code_point) {
+                    if *cflag {
+                        self.combinings.as_mut().map(|v| v.push(*uni));
+                    } else {
+                        self.uni_list.as_mut().map(|v| v.push(*uni));
+                        if let Some(combinings) = self.combinings.as_mut() {
+                            if !combinings.is_empty() {
+                                self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
+                                self.combinings.as_mut().map(|v| v.clear());
+                            }
+                        }
                     }
-                }
-            } else if code_point > 0x80 && !mb_flag {
-                if let Some(charset) = codesets().get(&self.g1) {
-                    self.handle_codepoint(charset, code_point);
                 }
             } else {
-                if let Some(charset) = codesets().get(&self.g0) {
-                    self.handle_codepoint(charset, code_point);
+                if let Some(val) = odd_map().get(&(code_point)) {
+                    self.uni_list.as_mut().map(|v| v.push(*val));
+                    continue;
                 } else {
-                    if let Some(val) = odd_map().get(&(code_point)) {
-                        self.uni_list.as_mut().map(|v| v.push(*val));
-                    } else {
-                        if !self.quiet {
-                            eprintln!(
-                                "Unable to parse character 0x{:X} in g0={} g1={}",
-                                code_point, self.g0, self.g1
-                            );
-                        }
-                        self.uni_list.as_mut().map(|v| v.push(BLANK));
+                    if !self.quiet {
+                        eprintln!(
+                            "Unable to parse character 0x{:X} in g0={} g1={}",
+                            code_point, self.g0, self.g1
+                        );
                     }
+                    self.uni_list.as_mut().map(|v| v.push(BLANK));
                 }
             }
         }
 
         if let Some(v) = self.uni_list.to_owned() {
-            return Ok(Cow::Owned(String::from_iter(v)));
+            let s = v.into_iter().nfc().collect::<String>();
+            Ok(s)
         } else {
             Err(EncodingError::NoData)
-        }
-    }
-
-    fn handle_codepoint(&mut self, charset: &HashMap<u32, (char, bool)>, code_point: u32) {
-        if let Some((uni, cflag)) = charset.get(&code_point) {
-            if *cflag {
-                self.combinings.as_mut().map(|v| v.push(*uni));
-            } else {
-                self.uni_list.as_mut().map(|v| v.push(*uni));
-                if let Some(combinings) = self.combinings.as_mut() {
-                    if let Some(&combining) = combinings.iter().next() {
-                        self.uni_list.as_mut().map(|v| v.push(combining));
-                        self.combinings.as_mut().map(|v| v.clear());
-                    }
-                }
-            }
         }
     }
 }
@@ -173,7 +170,7 @@ impl MARC8ToUnicode {
     }
 
     fn translate(&mut self, marc8_string: &[u8]) -> String {
-        self.0.decode(marc8_string).unwrap().to_string()
+        self.0.decode(marc8_string).unwrap()
     }
 }
 
@@ -186,21 +183,40 @@ fn marc8(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
     fn it_works() {
         let mut converter = Decoder::new(None, None, None);
-        let want = "Conversação".to_string();
         let got = converter.decode(b"Conversa\xF0c\xE4ao").unwrap();
+        let want = "Conversação";
         assert_eq!(got, want);
     }
 
     #[test]
     fn subscript_works() {
         let mut converter = Decoder::new(None, None, None);
-        let want = "CO₂ is a gas".to_string();
+        let want = "CO₂ is a gas";
         let got = converter.decode(b"CO\x1bb2\x1bs is a gas").unwrap();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn combining() {
+        let mut converter = Decoder::new(None, None, None);
+        let got = converter.decode(b"La Soci\xe2et").unwrap();
+        let want = "La Sociét";
+        //assert_eq!(got.len(), want.len());
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn bad_escape() {
+        let mut converter = Decoder::new(None, None, None);
+        let got = converter.decode(b"La Soci\xe2et\x1b,").unwrap();
+        let want = "La Sociét\x1b,";
+        //assert_eq!(got.len(), want.len());
         assert_eq!(got, want);
     }
 }
