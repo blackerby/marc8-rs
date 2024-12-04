@@ -56,6 +56,7 @@ impl Decoder {
                         pos += 3;
                         continue;
                     } else {
+                        // TODO: decode as ASCII?
                         self.uni_list
                             .as_mut()
                             .map(|v| v.push(char::from(marc8_string[pos])));
@@ -84,7 +85,7 @@ impl Decoder {
                 }
             }
 
-            let mb_flag = self.g0 == EACC;
+            let mb_flag = self.g0 == MULTI_BYTE;
             let code_point: u32;
             if mb_flag {
                 if marc8_string.len() < pos + 3 {
@@ -95,11 +96,9 @@ impl Decoder {
                     );
                     code_point = BLANK as u32;
                 } else {
-                    let mut bytes: [u8; 4] = [0, 0, 0, 0];
-                    bytes[1] = marc8_string[pos];
-                    bytes[2] = marc8_string[pos + 1];
-                    bytes[3] = marc8_string[pos + 2];
-                    code_point = u32::from_le_bytes(bytes);
+                    code_point = (marc8_string[pos] as u32) * 65536
+                        + (marc8_string[pos + 1] as u32) * 256
+                        + (marc8_string[pos + 2] as u32);
                 }
                 pos += 3;
             } else {
@@ -130,20 +129,20 @@ impl Decoder {
                             }
                         }
                     }
+                } else {
+                    if let Some(uni) = odd_map().get(&(code_point)) {
+                        self.uni_list.as_mut().map(|v| v.push(*uni));
+                        continue;
+                    }
                 }
             } else {
-                if let Some(val) = odd_map().get(&(code_point)) {
-                    self.uni_list.as_mut().map(|v| v.push(*val));
-                    continue;
-                } else {
-                    if !self.quiet {
-                        eprintln!(
-                            "Unable to parse character 0x{:X} in g0={} g1={}",
-                            code_point, self.g0, self.g1
-                        );
-                    }
-                    self.uni_list.as_mut().map(|v| v.push(BLANK));
+                if !self.quiet {
+                    eprintln!(
+                        "Unable to parse character 0x{:X} in g0={} g1={}",
+                        code_point, self.g0, self.g1
+                    );
                 }
+                self.uni_list.as_mut().map(|v| v.push(BLANK));
             }
         }
 
@@ -207,7 +206,6 @@ mod tests {
         let mut converter = Decoder::new(None, None, None);
         let got = converter.decode(b"La Soci\xe2et").unwrap();
         let want = "La Sociét";
-        //assert_eq!(got.len(), want.len());
         assert_eq!(got, want);
     }
 
@@ -216,7 +214,22 @@ mod tests {
         let mut converter = Decoder::new(None, None, None);
         let got = converter.decode(b"La Soci\xe2et\x1b,").unwrap();
         let want = "La Sociét\x1b,";
-        //assert_eq!(got.len(), want.len());
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn odd_chars() {
+        let bytes: &[u8] = &[
+            0x61, 0x20, 0x1b, 0x24, 0x31, 0x21, 0x20, 0x3d, 0x21, 0x20, 0x40, 0x7f, 0x20, 0x14,
+            0x7f, 0x20, 0x19, 0x7f, 0x20, 0x20, 0x7f, 0x21, 0x22, 0x1b, 0x28, 0x42, 0x20, 0x7a,
+            0x0a,
+        ];
+        let want = "a …“—’”™ z";
+        let mut converter = Decoder::new(None, None, None);
+        let got = converter.decode(bytes).unwrap();
+        println!("{got}");
+        let bytes = got.as_bytes();
+        println!("{:x?}", bytes);
         assert_eq!(got, want);
     }
 }
