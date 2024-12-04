@@ -14,3 +14,6 @@ unicode-normalization = "0.1.24"
 [features]
 python = ["dep:pyo3"]
 
+[dev-dependencies]
+pyo3 = "0.23.2"
+

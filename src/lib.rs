@@ -35,7 +35,7 @@ impl Decoder {
 
     pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<String, EncodingError> {
         if marc8_string.is_empty() {
-            return Ok("".to_string());
+            return Ok(String::new());
         }
 
         self.uni_list = Some(Vec::new());
@@ -44,7 +44,7 @@ impl Decoder {
         let mut next_byte: u8;
 
         while pos < marc8_string.len() {
-            if is_escape(marc8_string[pos]) {
+            if marc8_string[pos] == ESCAPE {
                 next_byte = marc8_string[pos + 1];
 
                 if G0_SET.contains(&next_byte) {
@@ -56,7 +56,6 @@ impl Decoder {
                         pos += 3;
                         continue;
                     } else {
-                        // TODO: decode as ASCII?
                         self.uni_list
                             .as_mut()
                             .map(|v| v.push(char::from(marc8_string[pos])));
@@ -224,9 +223,8 @@ mod tests {
         let want = "a …“—’”™ z";
         let mut converter = Decoder::new(None, None, None);
         let got = converter.decode(bytes).unwrap();
-        println!("{got}");
-        let bytes = got.as_bytes();
-        println!("{:x?}", bytes);
+        println!("{:?}", got);
+        println!("{:x?}", got);
         assert_eq!(got, want);
     }
 
@@ -235,6 +233,18 @@ mod tests {
         let mut converter = Decoder::new(None, None, Some(true));
         let got = converter.decode(b"a\xcc\x80").unwrap();
         let want = "a  ";
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn marc8_to_unicode() {
+        let mut converter = Decoder::new(None, None, None);
+
+        let got = converter
+            .decode(b"\x1b(3YhOI,\x1b(B \x1b(3eMeO\x1b(B.")
+            .unwrap()
+            .into_bytes();
+        let want = b"\xd8\xb9\xd9\x88\xd8\xaf\xd8\xa9\xd8\x8c \xd9\x85\xd8\xad\xd9\x85\xd8\xaf.";
         assert_eq!(got, want);
     }
 }
