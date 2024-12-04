@@ -8,6 +8,8 @@ use crate::error::EncodingError;
 use crate::mappings::{codesets, odd_map};
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
+use pyo3::types::PyBytes;
 use unicode_normalization::UnicodeNormalization;
 
 pub struct Decoder {
@@ -164,7 +166,8 @@ impl MARC8ToUnicode {
         Self(Decoder::new(g0, g1, quiet))
     }
 
-    fn translate(&mut self, marc8_string: &[u8]) -> String {
+    fn translate(&mut self, marc8_string: &Bound<'_, PyBytes>) -> String {
+        let marc8_string = marc8_string.extract::<&[u8]>().unwrap();
         self.0.decode(marc8_string).unwrap()
     }
 }
