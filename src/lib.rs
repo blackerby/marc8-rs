@@ -9,7 +9,7 @@ use crate::mappings::{codesets, odd_map};
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyString};
 use unicode_normalization::UnicodeNormalization;
 
 pub struct Decoder {
@@ -166,9 +166,17 @@ impl MARC8ToUnicode {
         Self(Decoder::new(g0, g1, quiet))
     }
 
-    fn translate(&mut self, marc8_string: &Bound<'_, PyBytes>) -> String {
-        let marc8_string = marc8_string.extract::<&[u8]>().unwrap();
-        self.0.decode(marc8_string).unwrap()
+    fn translate(&mut self, marc8_string: &Bound<'_, PyAny>) -> String {
+        if let Ok(marc8_string) = marc8_string.clone().downcast_into::<PyBytes>() {
+            let marc8_string = marc8_string.extract::<&[u8]>().unwrap();
+            return self.0.decode(marc8_string).unwrap();
+        }
+
+        if let Ok(marc8_string) = marc8_string.clone().downcast_into::<PyString>() {
+            let marc8_string = marc8_string.extract::<String>().unwrap();
+            return self.0.decode(marc8_string.as_bytes()).unwrap();
+        }
+        panic!("You should raise a type error here");
     }
 }
 
