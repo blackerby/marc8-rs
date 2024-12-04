@@ -115,9 +115,11 @@ impl Decoder {
             } else {
                 &self.g0
             };
-
+            dbg!(code_point);
             if let Some(charset) = codesets().get(codeset) {
+                dbg!(codeset);
                 if let Some((uni, cflag)) = charset.get(&code_point) {
+                    dbg!(uni);
                     if *cflag {
                         self.combinings.as_mut().map(|v| v.push(*uni));
                     } else {
@@ -230,6 +232,14 @@ mod tests {
         println!("{got}");
         let bytes = got.as_bytes();
         println!("{:x?}", bytes);
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn blanks_in_expected_places() {
+        let mut converter = Decoder::new(None, None, Some(true));
+        let got = converter.decode(b"a\xcc\x80").unwrap();
+        let want = "a  ";
         assert_eq!(got, want);
     }
 }
