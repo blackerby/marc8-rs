@@ -1,3 +1,5 @@
+// TODO: get rid of static HashMaps. Refactor to use match expressions.
+
 use crate::charsets::{
     ASCII, BASIC_ARABIC, BASIC_CYRILLIC, BASIC_GREEK, BASIC_HEBREW, EACC, EXTENDED_ARABIC,
     EXTENDED_CYRILLIC, EXTENDED_LATIN, GREEK_SYMBOLS, SUBSCRIPTS, SUPERSCRIPTS,
@@ -56,24 +58,6 @@ pub fn codesets() -> &'static HashMap<u8, &'static HashMap<u32, (char, bool)>> {
         m.insert(0x62, subscripts());
         m.insert(0x67, greek_symbols());
         m.insert(0x70, superscripts());
-
-        m
-    })
-}
-
-// ODD_MAP for odd characters (all from III for now)
-pub fn odd_map() -> &'static HashMap<u32, char> {
-    static HASHMAP: OnceLock<HashMap<u32, char>> = OnceLock::new();
-
-    HASHMAP.get_or_init(|| {
-        let mut m = HashMap::new();
-
-        m.insert(0x21203D, '\u{2026}'); // HORIZONTAL ELLIPSIS
-        m.insert(0x212040, '\u{201C}'); // LEFT DOUBLE QUOTATION MARK
-        m.insert(0x7F2014, '\u{2014}'); // EM DASH
-        m.insert(0x7F2019, '\u{2019}'); // RIGHT SINGLE QUOTATION MARK
-        m.insert(0x7F2020, '\u{201D}'); // RIGHT DOUBLE QUOTATION MARK
-        m.insert(0x7F2122, '\u{2122}'); // TRADE MARK SIGN
 
         m
     })

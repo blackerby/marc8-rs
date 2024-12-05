@@ -8,7 +8,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::constants::*;
 use crate::error::EncodingError;
-use crate::mappings::{codesets, odd_map};
+use crate::mappings::codesets;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
@@ -132,17 +132,27 @@ impl Decoder {
                             }
                         }
                     }
-                } else if let Some(uni) = odd_map().get(&(code_point)) {
-                    self.uni_list.as_mut().map(|v| v.push(*uni));
-                    continue;
                 } else {
-                    if !self.quiet {
-                        eprintln!(
-                            "Unable to parse character 0x{:X} in g0={} g1={}",
-                            code_point, self.g0, self.g1
-                        );
-                    }
-                    self.uni_list.as_mut().map(|v| v.push(BLANK));
+                    // odd chars
+                    let uni = match &code_point {
+                        0x21203D => '\u{2026}', // HORIZONTAL ELLIPSIS
+                        0x212040 => '\u{201C}', // LEFT DOUBLE QUOTATION MARK
+                        0x7F2014 => '\u{2014}', // EM DASH
+                        0x7F2019 => '\u{2019}', // RIGHT SINGLE QUOTATION MARK
+                        0x7F2020 => '\u{201D}', // RIGHT DOUBLE QUOTATION MARK
+                        0x7F2122 => '\u{2122}', // TRADE MARK SIGN
+                        _ => {
+                            if !self.quiet {
+                                eprintln!(
+                                    "Unable to parse character 0x{:X} in g0={} g1={}",
+                                    code_point, self.g0, self.g1
+                                );
+                            }
+                            self.uni_list.as_mut().map(|v| v.push(BLANK));
+                            continue;
+                        }
+                    };
+                    self.uni_list.as_mut().map(|v| v.push(uni));
                 }
             }
         }
