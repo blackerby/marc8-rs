@@ -1,14 +1,13 @@
 mod charsets;
 mod constants;
 mod error;
-mod mappings;
 
 use std::borrow::Cow;
+use std::char;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::constants::*;
 use crate::error::EncodingError;
-use crate::mappings::codesets;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
@@ -75,7 +74,7 @@ impl Decoder {
                     continue;
                 } else {
                     let charset = next_byte;
-                    if codesets().contains_key(&charset) {
+                    if CODESETS.contains(&charset) {
                         self.g0 = charset;
                         pos += 2;
                     } else if charset == REDESIGNATED_ASCII {
@@ -119,42 +118,129 @@ impl Decoder {
                 &self.g0
             };
 
-            if let Some(charset) = codesets().get(codeset) {
-                if let Some((uni, cflag)) = charset.get(&code_point) {
-                    if *cflag {
-                        self.combinings.as_mut().map(|v| v.push(*uni));
-                    } else {
-                        self.uni_list.as_mut().map(|v| v.push(*uni));
-                        if let Some(combinings) = self.combinings.as_mut() {
-                            if !combinings.is_empty() {
-                                self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
-                                self.combinings.as_mut().map(|v| v.clear());
+            match codeset {
+                0x31 => {
+                    if let Some(uni) = charsets::get_eacc(code_point) {
+                        self.uni_list.as_mut().map(|v| v.push(uni));
+                    } else if let Some(uni) = charsets::get_odd_char(code_point) {
+                        self.uni_list.as_mut().map(|v| v.push(uni));
+                    }
+                }
+                0x32 => {
+                    if let Some((uni, cflag)) = charsets::get_basic_hebrew(code_point) {
+                        if cflag {
+                            self.combinings.as_mut().map(|v| v.push(uni));
+                        } else {
+                            self.uni_list.as_mut().map(|v| v.push(uni));
+                            if let Some(combinings) = self.combinings.as_mut() {
+                                if !combinings.is_empty() {
+                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
+                                    self.combinings.as_mut().map(|v| v.clear());
+                                }
                             }
                         }
                     }
-                } else {
-                    // odd chars
-                    let uni = match &code_point {
-                        0x21203D => '\u{2026}', // HORIZONTAL ELLIPSIS
-                        0x212040 => '\u{201C}', // LEFT DOUBLE QUOTATION MARK
-                        0x7F2014 => '\u{2014}', // EM DASH
-                        0x7F2019 => '\u{2019}', // RIGHT SINGLE QUOTATION MARK
-                        0x7F2020 => '\u{201D}', // RIGHT DOUBLE QUOTATION MARK
-                        0x7F2122 => '\u{2122}', // TRADE MARK SIGN
-                        _ => {
-                            if !self.quiet {
-                                eprintln!(
-                                    "Unable to parse character 0x{:X} in g0={} g1={}",
-                                    code_point, self.g0, self.g1
-                                );
+                }
+                0x33 => {
+                    if let Some((uni, cflag)) = charsets::get_basic_arabic(code_point) {
+                        if cflag {
+                            self.combinings.as_mut().map(|v| v.push(uni));
+                        } else {
+                            self.uni_list.as_mut().map(|v| v.push(uni));
+                            if let Some(combinings) = self.combinings.as_mut() {
+                                if !combinings.is_empty() {
+                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
+                                    self.combinings.as_mut().map(|v| v.clear());
+                                }
                             }
-                            self.uni_list.as_mut().map(|v| v.push(BLANK));
-                            continue;
                         }
-                    };
+                    }
+                }
+                0x34 => {
+                    if let Some((uni, cflag)) = charsets::get_extended_arabic(code_point) {
+                        if cflag {
+                            self.combinings.as_mut().map(|v| v.push(uni));
+                        } else {
+                            self.uni_list.as_mut().map(|v| v.push(uni));
+                            if let Some(combinings) = self.combinings.as_mut() {
+                                if !combinings.is_empty() {
+                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
+                                    self.combinings.as_mut().map(|v| v.clear());
+                                }
+                            }
+                        }
+                    }
+                }
+                0x42 => {
+                    let uni = char::from_u32(code_point).unwrap();
+                    self.uni_list.as_mut().map(|v| v.push(uni));
+                    if let Some(combinings) = self.combinings.as_mut() {
+                        if !combinings.is_empty() {
+                            self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
+                            self.combinings.as_mut().map(|v| v.clear());
+                        }
+                    }
+                }
+                0x45 => {
+                    if let Some((uni, cflag)) = charsets::get_ansel(code_point) {
+                        if cflag {
+                            self.combinings.as_mut().map(|v| v.push(uni));
+                        } else {
+                            self.uni_list.as_mut().map(|v| v.push(uni));
+                            if let Some(combinings) = self.combinings.as_mut() {
+                                if !combinings.is_empty() {
+                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
+                                    self.combinings.as_mut().map(|v| v.clear());
+                                }
+                            }
+                        }
+                    }
+                }
+                0x4E => {
+                    let uni = charsets::get_basic_cyrillic(code_point);
                     self.uni_list.as_mut().map(|v| v.push(uni));
                 }
-            }
+                0x51 => {
+                    let uni = charsets::get_extended_cyrillic(code_point);
+                    self.uni_list.as_mut().map(|v| v.push(uni));
+                }
+                0x53 => {
+                    if let Some((uni, cflag)) = charsets::get_basic_greek(code_point) {
+                        if cflag {
+                            self.combinings.as_mut().map(|v| v.push(uni));
+                        } else {
+                            self.uni_list.as_mut().map(|v| v.push(uni));
+                            if let Some(combinings) = self.combinings.as_mut() {
+                                if !combinings.is_empty() {
+                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
+                                    self.combinings.as_mut().map(|v| v.clear());
+                                }
+                            }
+                        }
+                    }
+                }
+                0x62 => {
+                    let uni = charsets::get_subscript(code_point);
+                    self.uni_list.as_mut().map(|v| v.push(uni));
+                }
+                0x67 => {
+                    let uni = charsets::get_greek_symbol(code_point);
+                    self.uni_list.as_mut().map(|v| v.push(uni));
+                }
+                0x70 => {
+                    let uni = charsets::get_superscript(code_point);
+                    self.uni_list.as_mut().map(|v| v.push(uni));
+                }
+                _ => {
+                    if !self.quiet {
+                        eprintln!(
+                            "Unable to parse character 0x{:X} in g0={} g1={}",
+                            code_point, self.g0, self.g1
+                        );
+                    }
+                    self.uni_list.as_mut().map(|v| v.push(BLANK));
+                }
+            };
         }
 
         if let Some(v) = self.uni_list.to_owned() {
