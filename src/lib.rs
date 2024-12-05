@@ -3,6 +3,9 @@ mod constants;
 mod error;
 mod mappings;
 
+use std::borrow::Cow;
+use unicode_normalization::UnicodeNormalization;
+
 use crate::constants::*;
 use crate::error::EncodingError;
 use crate::mappings::{codesets, odd_map};
@@ -10,7 +13,6 @@ use crate::mappings::{codesets, odd_map};
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
 use pyo3::types::{PyBytes, PyString};
-use unicode_normalization::UnicodeNormalization;
 
 pub struct Decoder {
     g0: u8,
@@ -35,9 +37,9 @@ impl Decoder {
         }
     }
 
-    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<String, EncodingError> {
+    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
         if marc8_string.is_empty() {
-            return Ok(String::new());
+            return Ok(Cow::Borrowed(""));
         }
 
         self.uni_list = Some(Vec::new());
@@ -97,9 +99,9 @@ impl Decoder {
                     );
                     code_point = BLANK as u32;
                 } else {
-                    code_point = (marc8_string[pos] as u32) * 65536
-                        + (marc8_string[pos + 1] as u32) * 256
-                        + (marc8_string[pos + 2] as u32);
+                    code_point = (marc8_string[pos] as u32) << 16
+                        | (marc8_string[pos + 1] as u32) << 8
+                        | (marc8_string[pos + 2]) as u32;
                 }
                 pos += 3;
             } else {
@@ -116,6 +118,7 @@ impl Decoder {
             } else {
                 &self.g0
             };
+
             if let Some(charset) = codesets().get(codeset) {
                 if let Some((uni, cflag)) = charset.get(&code_point) {
                     if *cflag {
@@ -146,7 +149,7 @@ impl Decoder {
 
         if let Some(v) = self.uni_list.to_owned() {
             let s = v.into_iter().nfc().collect::<String>();
-            Ok(s)
+            Ok(Cow::Owned(s))
         } else {
             Err(EncodingError::NoData)
         }
@@ -169,12 +172,12 @@ impl MARC8ToUnicode {
     fn translate(&mut self, marc8_string: &Bound<'_, PyAny>) -> String {
         if let Ok(marc8_string) = marc8_string.clone().downcast_into::<PyBytes>() {
             let marc8_string = marc8_string.extract::<&[u8]>().unwrap();
-            return self.0.decode(marc8_string).unwrap();
+            return self.0.decode(marc8_string).unwrap().to_string();
         }
 
         if let Ok(marc8_string) = marc8_string.clone().downcast_into::<PyString>() {
             let marc8_string = marc8_string.extract::<String>().unwrap();
-            return self.0.decode(marc8_string.as_bytes()).unwrap();
+            return self.0.decode(marc8_string.as_bytes()).unwrap().to_string();
         }
         panic!("You should raise a type error here");
     }
@@ -254,6 +257,7 @@ mod tests {
         let got = converter
             .decode(b"\x1b(3YhOI,\x1b(B \x1b(3eMeO\x1b(B.")
             .unwrap()
+            .to_string()
             .into_bytes();
         let want = b"\xd8\xb9\xd9\x88\xd8\xaf\xd8\xa9\xd8\x8c \xd9\x85\xd8\xad\xd9\x85\xd8\xaf.";
         assert_eq!(got, want);
