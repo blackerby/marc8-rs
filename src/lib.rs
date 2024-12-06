@@ -8,8 +8,6 @@ use unicode_normalization::UnicodeNormalization;
 use crate::error::EncodingError;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-#[cfg(feature = "python")]
-use pyo3::types::{PyBytes, PyString};
 
 pub const BASIC_LATIN: u8 = 0x42;
 pub const REDESIGNATED_ASCII: u8 = 0x73;
@@ -201,17 +199,8 @@ impl MARC8ToUnicode {
         Self(Decoder::new(g0, g1, quiet))
     }
 
-    fn translate(&mut self, marc8_string: &Bound<'_, PyAny>) -> String {
-        if let Ok(marc8_string) = marc8_string.clone().downcast_into::<PyBytes>() {
-            let marc8_string = marc8_string.extract::<&[u8]>().unwrap();
-            return self.0.decode(marc8_string).unwrap().to_string();
-        }
-
-        if let Ok(marc8_string) = marc8_string.clone().downcast_into::<PyString>() {
-            let marc8_string = marc8_string.extract::<String>().unwrap();
-            return self.0.decode(marc8_string.as_bytes()).unwrap().to_string();
-        }
-        panic!("You should raise a type error here");
+    fn translate(&mut self, marc8_string: &[u8]) -> String {
+        self.0.decode(marc8_string).unwrap().to_string()
     }
 }
 
