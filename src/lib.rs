@@ -1,16 +1,25 @@
 mod charsets;
-mod constants;
 mod error;
-mod mappings;
 
-use crate::constants::*;
+use std::borrow::Cow;
+use std::char;
+use unicode_normalization::UnicodeNormalization;
+
 use crate::error::EncodingError;
-use crate::mappings::{codesets, odd_map};
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-#[cfg(feature = "python")]
-use pyo3::types::{PyBytes, PyString};
-use unicode_normalization::UnicodeNormalization;
+
+pub const BASIC_LATIN: u8 = 0x42;
+pub const REDESIGNATED_ASCII: u8 = 0x73;
+pub const ANSEL: u8 = 0x45;
+pub const G0_SET: [u8; 3] = [b'(', b',', b'$'];
+pub const G1_SET: [u8; 3] = [b')', b'-', b'$'];
+pub const BLANK: char = ' ';
+pub const MULTI_BYTE: u8 = 0x31;
+pub const ESCAPE: u8 = 0x1b;
+pub const CODESETS: [u8; 12] = [
+    0x31, 0x32, 0x33, 0x34, 0x42, 0x45, 0x4E, 0x51, 0x53, 0x62, 0x67, 0x70,
+];
 
 pub struct Decoder {
     g0: u8,
@@ -35,9 +44,9 @@ impl Decoder {
         }
     }
 
-    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<String, EncodingError> {
+    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
         if marc8_string.is_empty() {
-            return Ok(String::new());
+            return Ok(Cow::Borrowed(""));
         }
 
         self.uni_list = Some(Vec::new());
@@ -73,7 +82,7 @@ impl Decoder {
                     continue;
                 } else {
                     let charset = next_byte;
-                    if codesets().contains_key(&charset) {
+                    if CODESETS.contains(&charset) {
                         self.g0 = charset;
                         pos += 2;
                     } else if charset == REDESIGNATED_ASCII {
@@ -97,9 +106,9 @@ impl Decoder {
                     );
                     code_point = BLANK as u32;
                 } else {
-                    code_point = (marc8_string[pos] as u32) * 65536
-                        + (marc8_string[pos + 1] as u32) * 256
-                        + (marc8_string[pos + 2] as u32);
+                    code_point = (marc8_string[pos] as u32) << 16
+                        | (marc8_string[pos + 1] as u32) << 8
+                        | (marc8_string[pos + 2]) as u32;
                 }
                 pos += 3;
             } else {
@@ -116,39 +125,63 @@ impl Decoder {
             } else {
                 &self.g0
             };
-            if let Some(charset) = codesets().get(codeset) {
-                if let Some((uni, cflag)) = charset.get(&code_point) {
-                    if *cflag {
-                        self.combinings.as_mut().map(|v| v.push(*uni));
-                    } else {
-                        self.uni_list.as_mut().map(|v| v.push(*uni));
-                        if let Some(combinings) = self.combinings.as_mut() {
-                            if !combinings.is_empty() {
-                                self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
-                                self.combinings.as_mut().map(|v| v.clear());
-                            }
+
+            let pair = Self::get_pair(codeset, code_point);
+            if let Some((uni, cflag)) = pair {
+                if cflag {
+                    self.combinings.as_mut().map(|v| v.push(uni));
+                } else {
+                    self.uni_list.as_mut().map(|v| v.push(uni));
+                    if let Some(combinings) = self.combinings.as_mut() {
+                        if !combinings.is_empty() {
+                            self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
+                            self.combinings.as_mut().map(|v| v.clear());
                         }
                     }
-                } else if let Some(uni) = odd_map().get(&(code_point)) {
-                    self.uni_list.as_mut().map(|v| v.push(*uni));
-                    continue;
-                } else {
-                    if !self.quiet {
-                        eprintln!(
-                            "Unable to parse character 0x{:X} in g0={} g1={}",
-                            code_point, self.g0, self.g1
-                        );
-                    }
-                    self.uni_list.as_mut().map(|v| v.push(BLANK));
                 }
+            } else if let Some((uni, _)) = charsets::get_odd_char(code_point) {
+                self.uni_list.as_mut().map(|v| v.push(uni));
+            } else {
+                if !self.quiet {
+                    eprintln!(
+                        "Unable to parse character 0x{:X} in g0={} g1={}",
+                        code_point, self.g0, self.g1
+                    );
+                }
+                self.uni_list.as_mut().map(|v| v.push(BLANK));
             }
         }
 
         if let Some(v) = self.uni_list.to_owned() {
             let s = v.into_iter().nfc().collect::<String>();
-            Ok(s)
+            Ok(Cow::Owned(s))
         } else {
             Err(EncodingError::NoData)
+        }
+    }
+
+    fn get_pair(codeset: &u8, code_point: u32) -> Option<(char, bool)> {
+        match codeset {
+            0x31 => charsets::get_eacc(code_point),
+            0x32 => charsets::get_basic_hebrew(code_point),
+            0x33 => charsets::get_basic_arabic(code_point),
+            0x34 => charsets::get_extended_arabic(code_point),
+            0x42 => {
+                if code_point < 0x80 {
+                    let uni = char::from_u32(code_point).unwrap();
+                    Some((uni, false))
+                } else {
+                    None
+                }
+            }
+            0x45 => charsets::get_ansel(code_point),
+            0x4E => charsets::get_basic_cyrillic(code_point),
+            0x51 => charsets::get_extended_cyrillic(code_point),
+            0x53 => charsets::get_basic_greek(code_point),
+            0x62 => charsets::get_subscript(code_point),
+            0x67 => charsets::get_greek_symbol(code_point),
+            0x70 => charsets::get_superscript(code_point),
+            _ => None,
         }
     }
 }
@@ -166,17 +199,8 @@ impl MARC8ToUnicode {
         Self(Decoder::new(g0, g1, quiet))
     }
 
-    fn translate(&mut self, marc8_string: &Bound<'_, PyAny>) -> String {
-        if let Ok(marc8_string) = marc8_string.clone().downcast_into::<PyBytes>() {
-            let marc8_string = marc8_string.extract::<&[u8]>().unwrap();
-            return self.0.decode(marc8_string).unwrap();
-        }
-
-        if let Ok(marc8_string) = marc8_string.clone().downcast_into::<PyString>() {
-            let marc8_string = marc8_string.extract::<String>().unwrap();
-            return self.0.decode(marc8_string.as_bytes()).unwrap();
-        }
-        panic!("You should raise a type error here");
+    fn translate(&mut self, marc8_string: &[u8]) -> String {
+        self.0.decode(marc8_string).unwrap().to_string()
     }
 }
 
@@ -254,6 +278,7 @@ mod tests {
         let got = converter
             .decode(b"\x1b(3YhOI,\x1b(B \x1b(3eMeO\x1b(B.")
             .unwrap()
+            .to_string()
             .into_bytes();
         let want = b"\xd8\xb9\xd9\x88\xd8\xaf\xd8\xa9\xd8\x8c \xd9\x85\xd8\xad\xd9\x85\xd8\xaf.";
         assert_eq!(got, want);
