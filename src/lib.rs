@@ -1,9 +1,8 @@
 mod charsets;
 mod error;
 
-use std::borrow::Cow;
 use std::char;
-use unicode_normalization::UnicodeNormalization;
+use unicode_normalization::char::compose;
 
 use crate::error::EncodingError;
 #[cfg(feature = "python")]
@@ -25,8 +24,6 @@ pub struct Decoder {
     g0: u8,
     g1: u8,
     quiet: bool,
-    uni_list: Option<Vec<char>>,
-    combinings: Option<Vec<char>>,
 }
 
 impl Decoder {
@@ -35,22 +32,16 @@ impl Decoder {
         let g1 = g1.unwrap_or(ANSEL);
         let quiet = quiet.unwrap_or(false);
 
-        Decoder {
-            g0,
-            g1,
-            quiet,
-            uni_list: None,
-            combinings: None,
-        }
+        Decoder { g0, g1, quiet }
     }
 
-    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<String, EncodingError> {
+        let mut out = String::with_capacity(marc8_string.len());
         if marc8_string.is_empty() {
-            return Ok(Cow::Borrowed(""));
+            return Ok(out);
         }
 
-        self.uni_list = Some(Vec::new());
-        self.combinings = Some(Vec::new());
+        let mut combinings = Vec::new();
         let mut pos = 0;
         let mut next_byte: u8;
 
@@ -67,9 +58,7 @@ impl Decoder {
                         pos += 3;
                         continue;
                     } else {
-                        self.uni_list
-                            .as_mut()
-                            .map(|v| v.push(char::from(marc8_string[pos])));
+                        out.push(char::from(marc8_string[pos]));
                         pos += 1;
                         continue;
                     }
@@ -127,20 +116,22 @@ impl Decoder {
             };
 
             let pair = Self::get_pair(codeset, code_point);
-            if let Some((uni, cflag)) = pair {
+            if let Some((mut uni, cflag)) = pair {
                 if cflag {
-                    self.combinings.as_mut().map(|v| v.push(uni));
+                    combinings.push(uni);
+                    continue;
                 } else {
-                    self.uni_list.as_mut().map(|v| v.push(uni));
-                    if let Some(combinings) = self.combinings.as_mut() {
-                        if !combinings.is_empty() {
-                            self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
-                            self.combinings.as_mut().map(|v| v.clear());
+                    let mut combinings_iter = combinings.iter();
+                    while let Some(&combining) = combinings_iter.next() {
+                        if let Some(combined) = compose(uni, combining) {
+                            uni = combined;
                         }
                     }
                 }
+                out.push(uni);
+                combinings.clear();
             } else if let Some((uni, _)) = charsets::get_odd_char(code_point) {
-                self.uni_list.as_mut().map(|v| v.push(uni));
+                out.push(uni);
             } else {
                 if !self.quiet {
                     eprintln!(
@@ -148,18 +139,18 @@ impl Decoder {
                         code_point, self.g0, self.g1
                     );
                 }
-                self.uni_list.as_mut().map(|v| v.push(BLANK));
+                out.push(BLANK);
             }
         }
 
-        if let Some(v) = self.uni_list.to_owned() {
-            let s = v.into_iter().nfc().collect::<String>();
-            Ok(Cow::Owned(s))
+        if !out.is_empty() {
+            Ok(out)
         } else {
             Err(EncodingError::NoData)
         }
     }
 
+    #[inline]
     fn get_pair(codeset: &u8, code_point: u32) -> Option<(char, bool)> {
         match codeset {
             0x31 => charsets::get_eacc(code_point),
@@ -200,7 +191,7 @@ impl MARC8ToUnicode {
     }
 
     fn translate(&mut self, marc8_string: &[u8]) -> String {
-        self.0.decode(marc8_string).unwrap().to_string()
+        self.0.decode(marc8_string).unwrap()
     }
 }
 
@@ -281,6 +272,15 @@ mod tests {
             .to_string()
             .into_bytes();
         let want = b"\xd8\xb9\xd9\x88\xd8\xaf\xd8\xa9\xd8\x8c \xd9\x85\xd8\xad\xd9\x85\xd8\xaf.";
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn multibyte_eacc() {
+        let mut converter = Decoder::new(None, None, None);
+        let bytes = b"\x1b\x24\x31\x21\x5f\x71\x1b\x28\x42\x20\x1b\x24\x31\x4b\x37\x6f\x21\x3c\x63\x1b\x28\x42\x2e\x0a";
+        let got = converter.decode(bytes).unwrap().into_bytes();
+        let want = b"\xe9\x9d\x96 \xe5\x9b\xbd\xe5\xb9\xb3.";
         assert_eq!(got, want);
     }
 }
