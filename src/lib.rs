@@ -118,61 +118,11 @@ impl Decoder {
                 &self.g0
             };
 
-            match codeset {
-                0x31 => {
-                    if let Some(uni) = charsets::get_eacc(code_point) {
-                        self.uni_list.as_mut().map(|v| v.push(uni));
-                    } else if let Some(uni) = charsets::get_odd_char(code_point) {
-                        self.uni_list.as_mut().map(|v| v.push(uni));
-                    }
-                }
-                0x32 => {
-                    if let Some((uni, cflag)) = charsets::get_basic_hebrew(code_point) {
-                        if cflag {
-                            self.combinings.as_mut().map(|v| v.push(uni));
-                        } else {
-                            self.uni_list.as_mut().map(|v| v.push(uni));
-                            if let Some(combinings) = self.combinings.as_mut() {
-                                if !combinings.is_empty() {
-                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
-                                    self.combinings.as_mut().map(|v| v.clear());
-                                }
-                            }
-                        }
-                    }
-                }
-                0x33 => {
-                    if let Some((uni, cflag)) = charsets::get_basic_arabic(code_point) {
-                        if cflag {
-                            self.combinings.as_mut().map(|v| v.push(uni));
-                        } else {
-                            self.uni_list.as_mut().map(|v| v.push(uni));
-                            if let Some(combinings) = self.combinings.as_mut() {
-                                if !combinings.is_empty() {
-                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
-                                    self.combinings.as_mut().map(|v| v.clear());
-                                }
-                            }
-                        }
-                    }
-                }
-                0x34 => {
-                    if let Some((uni, cflag)) = charsets::get_extended_arabic(code_point) {
-                        if cflag {
-                            self.combinings.as_mut().map(|v| v.push(uni));
-                        } else {
-                            self.uni_list.as_mut().map(|v| v.push(uni));
-                            if let Some(combinings) = self.combinings.as_mut() {
-                                if !combinings.is_empty() {
-                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
-                                    self.combinings.as_mut().map(|v| v.clear());
-                                }
-                            }
-                        }
-                    }
-                }
-                0x42 => {
-                    let uni = char::from_u32(code_point).unwrap();
+            let pair = Self::get_pair(codeset, code_point);
+            if let Some((uni, cflag)) = pair {
+                if cflag {
+                    self.combinings.as_mut().map(|v| v.push(uni));
+                } else {
                     self.uni_list.as_mut().map(|v| v.push(uni));
                     if let Some(combinings) = self.combinings.as_mut() {
                         if !combinings.is_empty() {
@@ -181,66 +131,17 @@ impl Decoder {
                         }
                     }
                 }
-                0x45 => {
-                    if let Some((uni, cflag)) = charsets::get_ansel(code_point) {
-                        if cflag {
-                            self.combinings.as_mut().map(|v| v.push(uni));
-                        } else {
-                            self.uni_list.as_mut().map(|v| v.push(uni));
-                            if let Some(combinings) = self.combinings.as_mut() {
-                                if !combinings.is_empty() {
-                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
-                                    self.combinings.as_mut().map(|v| v.clear());
-                                }
-                            }
-                        }
-                    }
+            } else if let Some((uni, _)) = charsets::get_odd_char(code_point) {
+                self.uni_list.as_mut().map(|v| v.push(uni));
+            } else {
+                if !self.quiet {
+                    eprintln!(
+                        "Unable to parse character 0x{:X} in g0={} g1={}",
+                        code_point, self.g0, self.g1
+                    );
                 }
-                0x4E => {
-                    let uni = charsets::get_basic_cyrillic(code_point);
-                    self.uni_list.as_mut().map(|v| v.push(uni));
-                }
-                0x51 => {
-                    let uni = charsets::get_extended_cyrillic(code_point);
-                    self.uni_list.as_mut().map(|v| v.push(uni));
-                }
-                0x53 => {
-                    if let Some((uni, cflag)) = charsets::get_basic_greek(code_point) {
-                        if cflag {
-                            self.combinings.as_mut().map(|v| v.push(uni));
-                        } else {
-                            self.uni_list.as_mut().map(|v| v.push(uni));
-                            if let Some(combinings) = self.combinings.as_mut() {
-                                if !combinings.is_empty() {
-                                    self.uni_list.as_mut().map(|v| v.extend(combinings.iter()));
-                                    self.combinings.as_mut().map(|v| v.clear());
-                                }
-                            }
-                        }
-                    }
-                }
-                0x62 => {
-                    let uni = charsets::get_subscript(code_point);
-                    self.uni_list.as_mut().map(|v| v.push(uni));
-                }
-                0x67 => {
-                    let uni = charsets::get_greek_symbol(code_point);
-                    self.uni_list.as_mut().map(|v| v.push(uni));
-                }
-                0x70 => {
-                    let uni = charsets::get_superscript(code_point);
-                    self.uni_list.as_mut().map(|v| v.push(uni));
-                }
-                _ => {
-                    if !self.quiet {
-                        eprintln!(
-                            "Unable to parse character 0x{:X} in g0={} g1={}",
-                            code_point, self.g0, self.g1
-                        );
-                    }
-                    self.uni_list.as_mut().map(|v| v.push(BLANK));
-                }
-            };
+                self.uni_list.as_mut().map(|v| v.push(BLANK));
+            }
         }
 
         if let Some(v) = self.uni_list.to_owned() {
@@ -248,6 +149,31 @@ impl Decoder {
             Ok(Cow::Owned(s))
         } else {
             Err(EncodingError::NoData)
+        }
+    }
+
+    fn get_pair(codeset: &u8, code_point: u32) -> Option<(char, bool)> {
+        match codeset {
+            0x31 => charsets::get_eacc(code_point),
+            0x32 => charsets::get_basic_hebrew(code_point),
+            0x33 => charsets::get_basic_arabic(code_point),
+            0x34 => charsets::get_extended_arabic(code_point),
+            0x42 => {
+                if code_point < 0x80 {
+                    let uni = char::from_u32(code_point).unwrap();
+                    Some((uni, false))
+                } else {
+                    None
+                }
+            }
+            0x45 => charsets::get_ansel(code_point),
+            0x4E => charsets::get_basic_cyrillic(code_point),
+            0x51 => charsets::get_extended_cyrillic(code_point),
+            0x53 => charsets::get_basic_greek(code_point),
+            0x62 => charsets::get_subscript(code_point),
+            0x67 => charsets::get_greek_symbol(code_point),
+            0x70 => charsets::get_superscript(code_point),
+            _ => None,
         }
     }
 }
