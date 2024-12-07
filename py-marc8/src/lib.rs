@@ -1,5 +1,4 @@
-#![cfg(feature = "python")]
-use crate::Marc8;
+use marc8::Marc8;
 use pyo3::prelude::*;
 
 #[pyclass]
@@ -19,7 +18,7 @@ impl MARC8ToUnicode {
 }
 
 #[pymodule]
-fn marc8(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn pymarc8(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MARC8ToUnicode>()?;
     Ok(())
 }

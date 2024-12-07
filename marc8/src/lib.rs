@@ -1,6 +1,5 @@
 mod charsets;
 mod error;
-mod python;
 
 use crate::error::EncodingError;
 use std::{borrow::Cow, char};

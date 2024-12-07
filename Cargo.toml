@@ -1,18 +1,9 @@
-[package]
-name = "marc8"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
 
-[lib]
-name = "marc8"
-crate-type = ["lib", "cdylib"]
-
-[dependencies]
-clap = { version = "4.5.23", optional = true, features = ["derive"] }
-pyo3 = { version = "0.23.3", features = ["abi3-py38"], optional = true }
-unicode-normalization = "0.1.24"
- 
-[features]
-python = ["dep:pyo3"]
-cli = ["dep:clap"]
+members = [
+  "marc8",
+  "marc8-cli",
+  "py-marc8"
+]
 

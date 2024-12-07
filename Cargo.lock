@@ -137,9 +137,15 @@ checksum = "09d6582e104315a817dff97f75133544b2e094ee22447d2acf4a74e189ba06fc"
 name = "marc8"
 version = "0.1.0"
 dependencies = [
- "clap",
- "pyo3",
  "unicode-normalization",
+]
+
+[[package]]
+name = "marc8-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "marc8",
 ]
 
 [[package]]
@@ -170,6 +176,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37d3544b3f2748c54e147655edb5025752e2303145b5aefb3c3ea2c78b973bb0"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "py-marc8"
+version = "0.1.0"
+dependencies = [
+ "marc8",
+ "pyo3",
 ]
 
 [[package]]
