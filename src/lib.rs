@@ -1,12 +1,10 @@
 mod charsets;
 mod error;
+mod python;
 
 use crate::error::EncodingError;
 use std::{borrow::Cow, char};
 use unicode_normalization::UnicodeNormalization;
-
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
 
 pub const BASIC_LATIN: u8 = 0x42;
 pub const REDESIGNATED_ASCII: u8 = 0x73;
@@ -173,31 +171,6 @@ impl Marc8 {
             _ => None,
         }
     }
-}
-
-#[cfg(feature = "python")]
-#[pyclass]
-struct MARC8ToUnicode(Marc8);
-
-#[cfg(feature = "python")]
-#[pymethods]
-impl MARC8ToUnicode {
-    #[new]
-    #[pyo3(signature = (g0 = None, g1 = None, quiet = None))]
-    fn new(g0: Option<u8>, g1: Option<u8>, quiet: Option<bool>) -> Self {
-        Self(Marc8::new(g0, g1, quiet))
-    }
-
-    fn translate(&mut self, marc8_string: &[u8]) -> String {
-        self.0.convert(marc8_string).unwrap().to_string()
-    }
-}
-
-#[cfg(feature = "python")]
-#[pymodule]
-fn marc8(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<MARC8ToUnicode>()?;
-    Ok(())
 }
 
 #[cfg(test)]
