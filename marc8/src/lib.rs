@@ -75,7 +75,7 @@ impl Marc8 {
                     } else if charset == REDESIGNATED_ASCII {
                         self.g0 = BASIC_LATIN;
                         pos += 2;
-                        if pos == marc8_string.len() {
+                        if pos == len {
                             break;
                         }
                     }
