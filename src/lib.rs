@@ -2,7 +2,7 @@ mod charsets;
 mod error;
 
 use crate::error::EncodingError;
-use std::char;
+use std::{borrow::Cow, char};
 use unicode_normalization::UnicodeNormalization;
 
 #[cfg(feature = "python")]
@@ -35,9 +35,9 @@ impl Decoder {
         Decoder { g0, g1, quiet }
     }
 
-    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<String, EncodingError> {
+    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
         if marc8_string.is_empty() {
-            return Ok(String::from_utf8(marc8_string.into()).unwrap());
+            return Ok(Cow::Borrowed(core::str::from_utf8(marc8_string).unwrap()));
         }
 
         let len = marc8_string.len();
@@ -142,7 +142,7 @@ impl Decoder {
         }
 
         if !out.is_empty() {
-            Ok(out.into_iter().nfc().collect::<String>())
+            Ok(Cow::Owned(out.into_iter().nfc().collect::<String>()))
         } else {
             Err(EncodingError::NoData)
         }
@@ -277,7 +277,7 @@ mod tests {
     fn multibyte_eacc() {
         let mut converter = Decoder::new(None, None, None);
         let bytes = b"\x1b\x24\x31\x21\x5f\x71\x1b\x28\x42\x20\x1b\x24\x31\x4b\x37\x6f\x21\x3c\x63\x1b\x28\x42\x2e\x0a";
-        let got = converter.decode(bytes).unwrap().into_bytes();
+        let got = converter.decode(bytes).unwrap().to_string().into_bytes();
         let want = b"\xe9\x9d\x96 \xe5\x9b\xbd\xe5\xb9\xb3.";
         assert_eq!(got, want);
     }
