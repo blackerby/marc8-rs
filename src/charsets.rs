@@ -1,18 +1,20 @@
 // Adapted from https://gitlab.com/pymarc/pymarc/-/blob/main/pymarc/marc8_mapping.py
 // MARC-8 Code Tables: https://www.loc.gov/marc/specifications/specchartables.html
 
-pub fn get_odd_char(code_point: u32) -> Option<(char, bool)> {
+#[inline]
+pub fn get_odd_char(code_point: u32) -> Option<char> {
     match code_point {
-        0x21203D => Some(('\u{2026}', false)), // HORIZONTAL ELLIPSIS
-        0x212040 => Some(('\u{201C}', false)), // LEFT DOUBLE QUOTATION MARK
-        0x7F2014 => Some(('\u{2014}', false)), // EM DASH
-        0x7F2019 => Some(('\u{2019}', false)), // RIGHT SINGLE QUOTATION MARK
-        0x7F2020 => Some(('\u{201D}', false)), // RIGHT DOUBLE QUOTATION MARK
-        0x7F2122 => Some(('\u{2122}', false)), // TRADE MARK SIGN
+        0x21203D => Some('\u{2026}'), // HORIZONTAL ELLIPSIS
+        0x212040 => Some('\u{201C}'), // LEFT DOUBLE QUOTATION MARK
+        0x7F2014 => Some('\u{2014}'), // EM DASH
+        0x7F2019 => Some('\u{2019}'), // RIGHT SINGLE QUOTATION MARK
+        0x7F2020 => Some('\u{201D}'), // RIGHT DOUBLE QUOTATION MARK
+        0x7F2122 => Some('\u{2122}'), // TRADE MARK SIGN
         _ => None,
     }
 }
 
+#[inline]
 pub fn get_superscript(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x28 => Some(('\u{207D}', false)), // SUPERSCRIPT OPENING PARENTHESIS / SUPERSCRIPT LEFT PARENTHESIS
@@ -33,6 +35,7 @@ pub fn get_superscript(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
+#[inline]
 pub fn get_greek_symbol(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x61 => Some(('\u{3B1}', false)), // GREEK SMALL LETTER ALPHA
@@ -42,6 +45,7 @@ pub fn get_greek_symbol(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
+#[inline]
 pub fn get_subscript(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x28 => Some(('\u{208D}', false)), // SUBSCRIPT OPENING PARENTHESIS / SUBSCRIPT LEFT PARENTHESIS
@@ -62,6 +66,7 @@ pub fn get_subscript(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
+#[inline]
 pub fn get_basic_cyrillic(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x21 => Some(('\u{21}', false)),  // EXCLAMATION MARK
@@ -162,6 +167,7 @@ pub fn get_basic_cyrillic(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
+#[inline]
 pub fn get_extended_cyrillic(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0xC0 => Some(('\u{491}', false)), // LOWERCASE GE WITH UPTURN / CYRILLIC SMALL LETTER GHE WITH UPTURN
@@ -210,6 +216,7 @@ pub fn get_extended_cyrillic(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
+#[inline]
 pub fn get_extended_arabic(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0xA1 => Some(('\u{6FD}', false)), // DOUBLE ALEF WITH HAMZA ABOVE / ARABIC SIGN SINDHI AMPERSAND
@@ -306,7 +313,7 @@ pub fn get_extended_arabic(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
-// Extended Latin (ANSEL)
+#[inline]
 pub fn get_ansel(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x88 => Some(('\u{98}', false)), // NON-SORT BEGIN / START OF STRING
@@ -382,6 +389,7 @@ pub fn get_ansel(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
+#[inline]
 pub fn get_basic_arabic(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x21 => Some(('\u{21}', false)),   // EXCLAMATION MARK
@@ -471,7 +479,7 @@ pub fn get_basic_arabic(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
-// Basic Hebrew
+#[inline]
 pub fn get_basic_hebrew(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x21 => Some(('\u{21}', false)),  // EXCLAMATION MARK
@@ -556,7 +564,7 @@ pub fn get_basic_hebrew(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
-// Chinese, Japanese, Korean (EACC)
+#[inline]
 pub fn get_eacc(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x215556 => Some(('\u{8461}', false)), // East Asian ideograph
@@ -16302,6 +16310,7 @@ pub fn get_eacc(code_point: u32) -> Option<(char, bool)> {
     }
 }
 
+#[inline]
 pub fn get_basic_greek(code_point: u32) -> Option<(char, bool)> {
     match code_point {
         0x21 => Some(('\u{300}', true)),   // COMBINING GRAVE ACCENT
