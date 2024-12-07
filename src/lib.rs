@@ -1,10 +1,10 @@
 mod charsets;
 mod error;
 
-use std::char;
-use unicode_normalization::char::compose;
-
 use crate::error::EncodingError;
+use std::char;
+use unicode_normalization::UnicodeNormalization;
+
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
@@ -36,21 +36,22 @@ impl Decoder {
     }
 
     pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<String, EncodingError> {
-        let mut out = String::with_capacity(marc8_string.len());
         if marc8_string.is_empty() {
-            return Ok(out);
+            return Ok(String::from_utf8(marc8_string.into()).unwrap());
         }
 
+        let len = marc8_string.len();
+        let mut out = Vec::new();
         let mut combinings = Vec::new();
         let mut pos = 0;
         let mut next_byte: u8;
 
-        while pos < marc8_string.len() {
+        while pos < len {
             if marc8_string[pos] == ESCAPE {
                 next_byte = marc8_string[pos + 1];
 
                 if G0_SET.contains(&next_byte) {
-                    if marc8_string.len() >= pos + 3 {
+                    if len >= pos + 3 {
                         if marc8_string[pos + 2] == b',' && next_byte == b'$' {
                             pos += 1;
                         }
@@ -87,11 +88,11 @@ impl Decoder {
             let mb_flag = self.g0 == MULTI_BYTE;
             let code_point: u32;
             if mb_flag {
-                if marc8_string.len() < pos + 3 {
+                if len < pos + 3 {
                     eprintln!(
                         "Multi-byte position {} exceeds length of marc8 string {}",
                         pos + 3,
-                        marc8_string.len()
+                        len
                     );
                     code_point = BLANK as u32;
                 } else {
@@ -116,21 +117,18 @@ impl Decoder {
             };
 
             let pair = Self::get_pair(codeset, code_point);
-            if let Some((mut uni, cflag)) = pair {
+            if let Some((uni, cflag)) = pair {
                 if cflag {
                     combinings.push(uni);
-                    continue;
                 } else {
-                    let mut combinings_iter = combinings.iter();
-                    while let Some(&combining) = combinings_iter.next() {
-                        if let Some(combined) = compose(uni, combining) {
-                            uni = combined;
-                        }
+                    out.push(uni);
+                    if !combinings.is_empty() {
+                        out.extend(combinings.iter());
                     }
+
+                    combinings.clear();
                 }
-                out.push(uni);
-                combinings.clear();
-            } else if let Some((uni, _)) = charsets::get_odd_char(code_point) {
+            } else if let Some(uni) = charsets::get_odd_char(code_point) {
                 out.push(uni);
             } else {
                 if !self.quiet {
@@ -144,7 +142,7 @@ impl Decoder {
         }
 
         if !out.is_empty() {
-            Ok(out)
+            Ok(out.into_iter().nfc().collect::<String>())
         } else {
             Err(EncodingError::NoData)
         }

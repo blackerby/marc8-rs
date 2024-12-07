@@ -2,14 +2,14 @@
 // MARC-8 Code Tables: https://www.loc.gov/marc/specifications/specchartables.html
 
 #[inline]
-pub fn get_odd_char(code_point: u32) -> Option<(char, bool)> {
+pub fn get_odd_char(code_point: u32) -> Option<char> {
     match code_point {
-        0x21203D => Some(('\u{2026}', false)), // HORIZONTAL ELLIPSIS
-        0x212040 => Some(('\u{201C}', false)), // LEFT DOUBLE QUOTATION MARK
-        0x7F2014 => Some(('\u{2014}', false)), // EM DASH
-        0x7F2019 => Some(('\u{2019}', false)), // RIGHT SINGLE QUOTATION MARK
-        0x7F2020 => Some(('\u{201D}', false)), // RIGHT DOUBLE QUOTATION MARK
-        0x7F2122 => Some(('\u{2122}', false)), // TRADE MARK SIGN
+        0x21203D => Some('\u{2026}'), // HORIZONTAL ELLIPSIS
+        0x212040 => Some('\u{201C}'), // LEFT DOUBLE QUOTATION MARK
+        0x7F2014 => Some('\u{2014}'), // EM DASH
+        0x7F2019 => Some('\u{2019}'), // RIGHT SINGLE QUOTATION MARK
+        0x7F2020 => Some('\u{201D}'), // RIGHT DOUBLE QUOTATION MARK
+        0x7F2122 => Some('\u{2122}'), // TRADE MARK SIGN
         _ => None,
     }
 }
