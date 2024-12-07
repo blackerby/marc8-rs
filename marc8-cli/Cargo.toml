@@ -6,3 +6,7 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.23", features = ["derive"] }
 marc8 = { path = "../marc8" }
+
+[[bin]]
+name = "marc2utf"
+path = "src/main.rs"
