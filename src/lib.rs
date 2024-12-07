@@ -189,7 +189,7 @@ impl MARC8ToUnicode {
     }
 
     fn translate(&mut self, marc8_string: &[u8]) -> String {
-        self.0.decode(marc8_string).unwrap()
+        self.0.decode(marc8_string).unwrap().to_string()
     }
 }
 
