@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 
 use clap::Parser;
-use marc8::Decoder;
+use marc8::Marc8;
 
 #[derive(Parser)]
 struct Config {
@@ -18,7 +18,7 @@ struct Config {
 // TODO: improve error handling
 fn main() {
     let config = Config::parse();
-    let mut decoder = Decoder::new(None, None, Some(config.quiet));
+    let mut converter = Marc8::new(None, None, Some(config.quiet));
 
     if let Some(ref path) = config.path {
         let reader: Box<dyn BufRead> = match path.as_str() {
@@ -27,7 +27,7 @@ fn main() {
         };
         for line in reader.lines() {
             let bytes = line.unwrap().into_bytes();
-            let result = decoder.decode(&bytes).unwrap();
+            let result = converter.convert(&bytes).unwrap();
             println!("{}", result);
         }
     }
