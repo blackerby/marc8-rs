@@ -8,13 +8,11 @@ name = "marc8"
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
+clap = { version = "4.5.23", optional = true, features = ["derive"] }
 pyo3 = { version = "0.23.3", features = ["abi3-py38"], optional = true }
 unicode-normalization = "0.1.24"
  
 [features]
 python = ["dep:pyo3"]
-cli = []
-
-[dev-dependencies]
-pyo3 = "0.23.3"
+cli = ["dep:clap"]
 
