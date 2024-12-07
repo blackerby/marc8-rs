@@ -2,11 +2,8 @@ mod charsets;
 mod error;
 
 use crate::error::EncodingError;
-use std::char;
+use std::{borrow::Cow, char};
 use unicode_normalization::UnicodeNormalization;
-
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
 
 pub const BASIC_LATIN: u8 = 0x42;
 pub const REDESIGNATED_ASCII: u8 = 0x73;
@@ -20,24 +17,24 @@ pub const CODESETS: [u8; 12] = [
     0x31, 0x32, 0x33, 0x34, 0x42, 0x45, 0x4E, 0x51, 0x53, 0x62, 0x67, 0x70,
 ];
 
-pub struct Decoder {
+pub struct Marc8 {
     g0: u8,
     g1: u8,
     quiet: bool,
 }
 
-impl Decoder {
+impl Marc8 {
     pub fn new(g0: Option<u8>, g1: Option<u8>, quiet: Option<bool>) -> Self {
         let g0 = g0.unwrap_or(BASIC_LATIN);
         let g1 = g1.unwrap_or(ANSEL);
         let quiet = quiet.unwrap_or(false);
 
-        Decoder { g0, g1, quiet }
+        Self { g0, g1, quiet }
     }
 
-    pub fn decode<'a>(&mut self, marc8_string: &'a [u8]) -> Result<String, EncodingError> {
+    pub fn convert<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
         if marc8_string.is_empty() {
-            return Ok(String::from_utf8(marc8_string.into()).unwrap());
+            return Ok(Cow::Borrowed(core::str::from_utf8(marc8_string).unwrap()));
         }
 
         let len = marc8_string.len();
@@ -142,7 +139,7 @@ impl Decoder {
         }
 
         if !out.is_empty() {
-            Ok(out.into_iter().nfc().collect::<String>())
+            Ok(Cow::Owned(out.into_iter().nfc().collect::<String>()))
         } else {
             Err(EncodingError::NoData)
         }
@@ -175,31 +172,6 @@ impl Decoder {
     }
 }
 
-#[cfg(feature = "python")]
-#[pyclass]
-struct MARC8ToUnicode(Decoder);
-
-#[cfg(feature = "python")]
-#[pymethods]
-impl MARC8ToUnicode {
-    #[new]
-    #[pyo3(signature = (g0 = None, g1 = None, quiet = None))]
-    fn new(g0: Option<u8>, g1: Option<u8>, quiet: Option<bool>) -> Self {
-        Self(Decoder::new(g0, g1, quiet))
-    }
-
-    fn translate(&mut self, marc8_string: &[u8]) -> String {
-        self.0.decode(marc8_string).unwrap()
-    }
-}
-
-#[cfg(feature = "python")]
-#[pymodule]
-fn marc8(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<MARC8ToUnicode>()?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -207,32 +179,32 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let mut converter = Decoder::new(None, None, None);
-        let got = converter.decode(b"Conversa\xF0c\xE4ao").unwrap();
+        let mut converter = Marc8::new(None, None, None);
+        let got = converter.convert(b"Conversa\xF0c\xE4ao").unwrap();
         let want = "Conversação";
         assert_eq!(got, want);
     }
 
     #[test]
     fn subscript_works() {
-        let mut converter = Decoder::new(None, None, None);
+        let mut converter = Marc8::new(None, None, None);
         let want = "CO₂ is a gas";
-        let got = converter.decode(b"CO\x1bb2\x1bs is a gas").unwrap();
+        let got = converter.convert(b"CO\x1bb2\x1bs is a gas").unwrap();
         assert_eq!(got, want);
     }
 
     #[test]
     fn combining() {
-        let mut converter = Decoder::new(None, None, None);
-        let got = converter.decode(b"La Soci\xe2et").unwrap();
+        let mut converter = Marc8::new(None, None, None);
+        let got = converter.convert(b"La Soci\xe2et").unwrap();
         let want = "La Sociét";
         assert_eq!(got, want);
     }
 
     #[test]
     fn bad_escape() {
-        let mut converter = Decoder::new(None, None, None);
-        let got = converter.decode(b"La Soci\xe2et\x1b,").unwrap();
+        let mut converter = Marc8::new(None, None, None);
+        let got = converter.convert(b"La Soci\xe2et\x1b,").unwrap();
         let want = "La Sociét\x1b,";
         assert_eq!(got, want);
     }
@@ -245,8 +217,8 @@ mod tests {
             0x0a,
         ];
         let want = "a …“—’”™ z";
-        let mut converter = Decoder::new(None, None, None);
-        let got = converter.decode(bytes).unwrap();
+        let mut converter = Marc8::new(None, None, None);
+        let got = converter.convert(bytes).unwrap();
         println!("{:?}", got);
         println!("{:x?}", got);
         assert_eq!(got, want);
@@ -254,18 +226,18 @@ mod tests {
 
     #[test]
     fn blanks_in_expected_places() {
-        let mut converter = Decoder::new(None, None, Some(true));
-        let got = converter.decode(b"a\xcc\x80").unwrap();
+        let mut converter = Marc8::new(None, None, Some(true));
+        let got = converter.convert(b"a\xcc\x80").unwrap();
         let want = "a  ";
         assert_eq!(got, want);
     }
 
     #[test]
     fn marc8_to_unicode() {
-        let mut converter = Decoder::new(None, None, None);
+        let mut converter = Marc8::new(None, None, None);
 
         let got = converter
-            .decode(b"\x1b(3YhOI,\x1b(B \x1b(3eMeO\x1b(B.")
+            .convert(b"\x1b(3YhOI,\x1b(B \x1b(3eMeO\x1b(B.")
             .unwrap()
             .to_string()
             .into_bytes();
@@ -275,9 +247,9 @@ mod tests {
 
     #[test]
     fn multibyte_eacc() {
-        let mut converter = Decoder::new(None, None, None);
+        let mut converter = Marc8::new(None, None, None);
         let bytes = b"\x1b\x24\x31\x21\x5f\x71\x1b\x28\x42\x20\x1b\x24\x31\x4b\x37\x6f\x21\x3c\x63\x1b\x28\x42\x2e\x0a";
-        let got = converter.decode(bytes).unwrap().into_bytes();
+        let got = converter.convert(bytes).unwrap().to_string().into_bytes();
         let want = b"\xe9\x9d\x96 \xe5\x9b\xbd\xe5\xb9\xb3.";
         assert_eq!(got, want);
     }

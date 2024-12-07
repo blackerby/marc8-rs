@@ -1,0 +1,12 @@
+[package]
+name = "marc8"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "marc8"
+crate-type = ["lib"]
+
+[dependencies]
+unicode-normalization = "0.1.24"
+
