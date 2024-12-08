@@ -1,7 +1,7 @@
 mod charsets;
 mod error;
 
-use crate::error::EncodingError;
+use crate::error::Marc8Error;
 use std::{borrow::Cow, char};
 use unicode_normalization::UnicodeNormalization;
 
@@ -32,12 +32,9 @@ impl Marc8 {
         Self { g0, g1, quiet }
     }
 
-    pub fn convert<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn convert<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, Marc8Error> {
         if marc8_string.is_empty() {
-            return match core::str::from_utf8(marc8_string) {
-                Ok(string) => Ok(Cow::Borrowed(string)),
-                Err(e) => Err(EncodingError::Utf8Error(e)),
-            };
+            return Ok(Cow::Borrowed(""));
         }
 
         let len = marc8_string.len();
@@ -144,7 +141,7 @@ impl Marc8 {
         if !out.is_empty() {
             Ok(Cow::Owned(out.into_iter().nfc().collect::<String>()))
         } else {
-            Err(EncodingError::NoData)
+            Err(Marc8Error::NoData)
         }
     }
 
