@@ -34,7 +34,10 @@ impl Marc8 {
 
     pub fn convert<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
         if marc8_string.is_empty() {
-            return Ok(Cow::Borrowed(core::str::from_utf8(marc8_string).unwrap()));
+            return match core::str::from_utf8(marc8_string) {
+                Ok(string) => Ok(Cow::Borrowed(string)),
+                Err(e) => Err(EncodingError::Utf8Error(e)),
+            };
         }
 
         let len = marc8_string.len();
@@ -154,8 +157,10 @@ impl Marc8 {
             0x34 => charsets::get_extended_arabic(code_point),
             0x42 => {
                 if code_point < 0x80 {
-                    let uni = char::from_u32(code_point).unwrap();
-                    Some((uni, false))
+                    match char::from_u32(code_point) {
+                        Some(uni) => Some((uni, false)),
+                        None => None,
+                    }
                 } else {
                     None
                 }
