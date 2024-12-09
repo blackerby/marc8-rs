@@ -1,7 +1,7 @@
 mod charsets;
 mod error;
 
-use crate::error::Marc8Error;
+pub use crate::error::Marc8Error;
 use std::{borrow::Cow, char};
 use unicode_normalization::UnicodeNormalization;
 
