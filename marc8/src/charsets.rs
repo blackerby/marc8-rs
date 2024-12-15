@@ -1,3 +1,8 @@
+#![allow(
+    clippy::match_same_arms,
+    clippy::unreadable_literal,
+    clippy::too_many_lines
+)]
 // Adapted from https://gitlab.com/pymarc/pymarc/-/blob/main/pymarc/marc8_mapping.py
 // MARC-8 Code Tables: https://www.loc.gov/marc/specifications/specchartables.html
 

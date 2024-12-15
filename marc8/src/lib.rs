@@ -1,8 +1,8 @@
 mod charsets;
 mod error;
 
-use crate::error::EncodingError;
-use std::{borrow::Cow, char};
+pub use crate::error::Marc8Error;
+use std::char;
 use unicode_normalization::UnicodeNormalization;
 
 pub const BASIC_LATIN: u8 = 0x42;
@@ -24,6 +24,7 @@ pub struct Marc8 {
 }
 
 impl Marc8 {
+    #[must_use]
     pub fn new(g0: Option<u8>, g1: Option<u8>, quiet: Option<bool>) -> Self {
         let g0 = g0.unwrap_or(BASIC_LATIN);
         let g1 = g1.unwrap_or(ANSEL);
@@ -32,11 +33,7 @@ impl Marc8 {
         Self { g0, g1, quiet }
     }
 
-    pub fn convert<'a>(&mut self, marc8_string: &'a [u8]) -> Result<Cow<'a, str>, EncodingError> {
-        if marc8_string.is_empty() {
-            return Ok(Cow::Borrowed(core::str::from_utf8(marc8_string).unwrap()));
-        }
-
+    pub fn convert(&mut self, marc8_string: &[u8]) -> Result<String, Marc8Error> {
         let len = marc8_string.len();
         let mut out = Vec::new();
         let mut combinings = Vec::new();
@@ -55,11 +52,10 @@ impl Marc8 {
                         self.g0 = marc8_string[pos + 2];
                         pos += 3;
                         continue;
-                    } else {
-                        out.push(char::from(marc8_string[pos]));
-                        pos += 1;
-                        continue;
                     }
+                    out.push(char::from(marc8_string[pos]));
+                    pos += 1;
+                    continue;
                 } else if G1_SET.contains(&next_byte) {
                     if marc8_string[pos + 2] == b'-' && next_byte == b'$' {
                         pos += 1;
@@ -67,17 +63,16 @@ impl Marc8 {
                     self.g1 = marc8_string[pos + 2];
                     pos += 3;
                     continue;
-                } else {
-                    let charset = next_byte;
-                    if CODESETS.contains(&charset) {
-                        self.g0 = charset;
-                        pos += 2;
-                    } else if charset == REDESIGNATED_ASCII {
-                        self.g0 = BASIC_LATIN;
-                        pos += 2;
-                        if pos == marc8_string.len() {
-                            break;
-                        }
+                }
+                let charset = next_byte;
+                if CODESETS.contains(&charset) {
+                    self.g0 = charset;
+                    pos += 2;
+                } else if charset == REDESIGNATED_ASCII {
+                    self.g0 = BASIC_LATIN;
+                    pos += 2;
+                    if pos == len {
+                        break;
                     }
                 }
             }
@@ -93,13 +88,13 @@ impl Marc8 {
                     );
                     code_point = BLANK as u32;
                 } else {
-                    code_point = (marc8_string[pos] as u32) << 16
-                        | (marc8_string[pos + 1] as u32) << 8
-                        | (marc8_string[pos + 2]) as u32;
+                    code_point = u32::from(marc8_string[pos]) << 16
+                        | u32::from(marc8_string[pos + 1]) << 8
+                        | u32::from(marc8_string[pos + 2]);
                 }
                 pos += 3;
             } else {
-                code_point = marc8_string[pos] as u32;
+                code_point = u32::from(marc8_string[pos]);
                 pos += 1;
             }
 
@@ -113,8 +108,7 @@ impl Marc8 {
                 &self.g0
             };
 
-            let pair = Self::get_pair(codeset, code_point);
-            if let Some((uni, cflag)) = pair {
+            if let Some((uni, cflag)) = Self::get_pair(*codeset, code_point) {
                 if cflag {
                     combinings.push(uni);
                 } else {
@@ -138,15 +132,15 @@ impl Marc8 {
             }
         }
 
-        if !out.is_empty() {
-            Ok(Cow::Owned(out.into_iter().nfc().collect::<String>()))
+        if out.is_empty() {
+            Err(Marc8Error::NoData)
         } else {
-            Err(EncodingError::NoData)
+            Ok(out.into_iter().nfc().collect::<String>())
         }
     }
 
     #[inline]
-    fn get_pair(codeset: &u8, code_point: u32) -> Option<(char, bool)> {
+    fn get_pair(codeset: u8, code_point: u32) -> Option<(char, bool)> {
         match codeset {
             0x31 => charsets::get_eacc(code_point),
             0x32 => charsets::get_basic_hebrew(code_point),
@@ -154,8 +148,7 @@ impl Marc8 {
             0x34 => charsets::get_extended_arabic(code_point),
             0x42 => {
                 if code_point < 0x80 {
-                    let uni = char::from_u32(code_point).unwrap();
-                    Some((uni, false))
+                    char::from_u32(code_point).map(|uni| (uni, false))
                 } else {
                     None
                 }
@@ -182,6 +175,14 @@ mod tests {
         let mut converter = Marc8::new(None, None, None);
         let got = converter.convert(b"Conversa\xF0c\xE4ao").unwrap();
         let want = "Conversação";
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn test_ascii_graphic() {
+        let mut converter = Marc8::new(None, None, None);
+        let got = converter.convert(b"hello").unwrap();
+        let want = "hello";
         assert_eq!(got, want);
     }
 
@@ -219,8 +220,8 @@ mod tests {
         let want = "a …“—’”™ z";
         let mut converter = Marc8::new(None, None, None);
         let got = converter.convert(bytes).unwrap();
-        println!("{:?}", got);
-        println!("{:x?}", got);
+        println!("{got:?}");
+        println!("{got:x?}");
         assert_eq!(got, want);
     }
 
